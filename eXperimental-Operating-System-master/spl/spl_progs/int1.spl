@@ -1,0 +1,131 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+alias filename S2;
+filename = [physicalSP - 3];
+alias fat S3;
+fat = FAT;
+if(sysCallNo == 1) then
+	while(fat <= 3063) do
+		if([fat + 0] == filename) then
+			break;
+		endif;
+		fat = fat + 8;
+	endwhile;
+	if([fat + 0] == filename) then
+		[physicalSP - 2] = 0;
+		ireturn;
+	endif;
+
+	alias df S4;
+	df = 3072;
+	while(df <= 3519) do
+		if([df] == 0) then
+			break;
+		endif;
+		df = df + 1;
+	endwhile;
+	if(df > 3519) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	df = df - 3072;
+	fat = FAT;
+	while(fat <= 3063) do
+		if([fat + 0] == -1) then
+			break;
+		endif;
+		fat = fat + 8;
+	endwhile;
+	if(fat > 3063) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	[fat + 0] = filename;
+	[fat + 1] = 0;
+	[fat + 2] = df;
+
+	load(1, df);
+	alias i S5;
+	i = 512;
+	while(i < 1024) do
+		[i] = -1;
+		i = i + 1;
+	endwhile;
+	store(1, df);
+	[df + 3072] = 1;
+	store(5, 19);
+	store(6, 20);
+	[physicalSP - 2] = 0;
+	ireturn;
+else
+	if(sysCallNo == 4) then
+		while(fat <= 3063) do
+			if([fat + 0] == filename) then
+				break;
+			endif;
+			fat = fat + 8;
+		endwhile;
+		if(fat >= 3063) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		
+		alias fatIndex S4;
+		fatIndex = (fat - FAT) / 8;
+		
+		alias i S6;
+		i = 0;
+		while(i < 128) do
+			if([FILE_TABLE + i + 0] == fatIndex) then
+				break;
+			endif;
+			i = i + 2;
+		endwhile;
+		if(i < 128) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		
+		alias basicBlock S5;
+		basicBlock = [fat + 2];
+
+		alias count S8;
+		count = 0;
+		alias dataBlock S7;
+
+		load(1, basicBlock);
+		while([512 + count] != -1) do
+			dataBlock = [512 + count];
+			load(1, dataBlock);
+			i = 512;
+			while(i < 1024) do
+				[i] = "";
+				i = i + 1;
+			endwhile;
+			store(1, dataBlock);
+			[dataBlock + 3072] = 0;
+			load(1, basicBlock);
+			count = count + 1;
+		endwhile;
+		i = 512;
+		while(i < 1024) do
+			[i] = "";
+			i = i + 1;
+		endwhile;
+		store(1, basicBlock);
+		[basicBlock + 3072] = 0;
+		[fat + 0] = -1;
+		[fat + 1] = 0;
+		[fat + 2] = -1;
+
+		store(5, 19);
+		store(6, 20);
+		[physicalSP - 2] = 0;
+		ireturn;
+	endif;
+endif;
+ireturn;

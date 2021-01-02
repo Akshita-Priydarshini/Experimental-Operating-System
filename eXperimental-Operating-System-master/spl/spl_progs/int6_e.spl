@@ -1,0 +1,100 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+alias filename S2;
+filename = [physicalSP - 3];
+alias currentPID S3;
+currentPID = (PTBR - 1024) / 8;
+alias currentPCB S4;
+currentPCB = READY_LIST + (currentPID * 32);
+
+if(sysCallNo == 9) then
+	alias fat S5;
+	fat = 2560;
+	while(fat < 3071) do
+		if([fat + 0] == filename) then
+			break;
+		endif;
+		fat = fat + 8;
+	endwhile;
+	if(fat >= 3071) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	alias basicBlock S6;
+	basicBlock = [fat + 2];
+	load(1, basicBlock);
+
+	alias j S9;
+	alias i S8;
+	alias page S7;
+
+	i = 0;
+	while(i < 6) do
+		page = PTBR + (i * 2);
+		if([page + 1] == "01" || [page + 1] == "11") then
+			[1280 + [page]] = [1280 + [page]] - 1;
+		else
+			if([page] >= 448) then
+				[3072 + [page]] = [3072 + [page]] - 1;
+			endif;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	i = 512;
+	j = 0;
+	while(i < 1024 && j < 3) do
+		page = PTBR + (j * 2);
+		if([i] > 23 && [i] < 448) then
+			[page] = [i];
+			[page + 1] = "00";
+			j = j + 1;
+		endif;
+		i = i + 1;
+	endwhile;
+
+	while(j < 3) do
+		page = PTBR + (j * 2);
+		[page] = -1;
+		[page + 1] = "00";
+		j = j + 1;
+	endwhile;
+
+	[PTBR + 7] = "01";
+
+	i = currentPCB + 15;
+	while(i < currentPCB + 31) do
+		if([i + 0] >= 0 && [i + 0] <= 63) then
+			[FILE_TABLE + ([i] * 2) + 1] = [FILE_TABLE + ([i] * 2) + 1] - 1;
+			if([FILE_TABLE + ([i] * 2) + 1] == 0) then
+				[FILE_TABLE + ([i] * 2)] = -1;
+			endif;
+
+			[i + 0] = -1;
+			[i + 1] = -1;
+
+		endif;
+		i = i + 2;
+	endwhile;
+
+	SP = 3 * 512;
+
+	[[PTBR + 6] * 512] = 0;
+
+
+	ireturn;
+endif;
+if(sysCallNo == 11) then
+	[physicalSP - 2] = currentPID;
+	ireturn;
+endif;
+if(sysCallNo == 12) then
+	if([currentPCB + 31] >= 0 && [currentPCB + 31] <= 31) then
+		[physicalSP - 2] = [currentPCB + 31];
+	else
+		[physicalSP - 2] = -1;
+	endif;
+	ireturn;
+endif;

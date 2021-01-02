@@ -1,0 +1,75 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+alias filedesc S2;
+filedesc = [physicalSP - 4];
+alias wordToWrite S3;
+wordToWrite = [physicalSP - 3];
+alias currentPID S4;
+currentPID = (PTBR - 1024) / 8;
+alias currentPCB S5;
+currentPCB = READY_LIST + currentPID * 32;
+
+if(sysCallNo == 5) then
+	if(filedesc < 0 || filedesc > 7) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+		
+	alias pPFileTableIndex S6;
+	pPFileTableIndex = filedesc * 2;
+	alias fileTableIndex S7;
+	fileTableIndex = currentPCB + pPFileTableIndex + 15;
+	
+	if([fileTableIndex] == -1) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias lseek S8;
+	lseek = [fileTableIndex + 1];
+	fileTableIndex = [fileTableIndex];
+
+	alias fatEntry S9;
+	fatEntry = [FILE_TABLE + (fileTableIndex * 2)];
+	
+	alias basicBlock S10;
+	basicBlock = [FAT + (fatEntry * 8) + 2];
+	
+	load(1, basicBlock);
+	
+	alias pageToWrite S11;
+	pageToWrite = [512 + (lseek / 512)];
+
+	if(pageToWrite == -1) then
+		alias df S12;
+		df = 3072;
+		while(df < 3520) do
+			if([df] == 0) then
+				break;
+			endif;
+			df = df + 1;
+		endwhile;
+		if(df >= 3520) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		[512 + (lseek / 512)] = df - 3072;
+		[df] = 1;
+		alias fatValue S13;
+		fatValue = FAT + (fatEntry * 8);
+		[fatValue + 1] = [fatValue + 1] + 512;
+		store(1, basicBlock);
+		store(5, 19);
+		store(6, 20);
+		pageToWrite = df - 3072;
+	endif;
+
+	load(1, pageToWrite);
+	[512 + (lseek % 512)] = wordToWrite;
+	store(1, pageToWrite);
+	[currentPCB + pPFileTableIndex + 16] = [currentPCB + pPFileTableIndex + 16] + 1;
+	[physicalSP - 2] = 0;
+	ireturn;
+endif;

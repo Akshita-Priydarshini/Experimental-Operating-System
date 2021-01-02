@@ -1,0 +1,99 @@
+alias cause S0;
+alias vPagenum S1;
+alias ipAddr S2;
+cause = EFR % 10;
+vPagenum = (EFR / 10) % 100;
+ipAddr = (EFR / 10);
+
+if(cause != 0) then
+	alias ipAddrP S10;
+	ipAddrP = ([PTBR + 2 * (ipAddr / 512)] * 512) + (ipAddr % 512);
+	if(cause == 1) then
+		print "Illegal Instruction";
+		print(ipAddrP);
+	else
+		if(cause == 2) then
+			print "Illegal memory access";
+			print(ipAddrP);
+		else
+			if(cause == 3) then
+				print "Arithmatic exception";
+			else
+				print "Illegal Operands";
+				print(ipAddrP);
+			endif;
+		endif;
+	endif;
+	inline "JMP 11776";
+
+else
+
+	alias pPagenum S6;
+	pPagenum = PTBR + vPagenum * 2;
+	if([pPagenum] == -1) then
+		print "invalid reference";
+		inline "JMP 11776";
+	endif;
+	
+	alias i S3;
+	alias page S4;
+	alias j S5;
+	i = 1280;
+	while(i < 1344) do
+		if([i] == 0) then
+			break;
+		endif;
+		i = i + 1;
+	endwhile;
+	if(i < 1344) then
+		page = i - 1280;
+		[i] = [i] + 1;
+	else
+		i = pPagenum;
+		while(i < 1279) do
+			if(i % 8 < 6) then
+				if(([i + 1] == "01" || [i + 1] == "00") && [1280 + [i]] <= 1) then
+					j = 3520;
+					while(j < 3584) do
+						if([j] == 0) then
+							break;
+						endif;
+						j = j + 1;
+					endwhile;
+					if(j >= 3584) then
+						inline "JMP 11776";
+					endif;
+					store([i], j-3072);
+					page = [i];
+					[j] = 1;
+					[i] = j-3072;
+					[i + 1] = "00";
+					break;
+				else
+					if([i + 1] == "11") then
+						[i + 1] = "01";
+					else
+						if([i + 1] == "10") then
+							[i + 1] = "00";
+						endif;
+					endif;
+				endif;
+			endif;
+			i = (i + 2) % 256 + 1024;
+		endwhile;
+	endif;
+	if([pPagenum] < 448) then
+		load(page, [pPagenum]);
+	else
+		load(page, [pPagenum]);
+		[3072 + [pPagenum]] = [3072 + [pPagenum]] - 1;
+	endif;
+	[pPagenum] = page;
+	[pPagenum + 1] = "11";
+	SP = SP + 1;
+	alias physicalSP S7;
+	physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+	[physicalSP] = ipAddr;
+	ireturn;
+endif;
+

@@ -1,0 +1,70 @@
+alias i S0;
+i = 0;
+while(i < 32) do
+	if([READY_LIST + (i * 32) + 1] == 1) then
+		break;
+	endif;
+	i = i + 1;
+endwhile;
+
+if(i >= 32) then
+	halt;
+endif;
+
+alias currentPID S1;
+alias currentPCB S2;
+currentPID = (PTBR - 1024) / 8;
+currentPCB = READY_LIST + (currentPID * 32);
+
+i = currentPCB + 15;
+while(i < currentPCB + 31) do
+	if([i + 0] != -1) then
+		[FILE_TABLE + ([i] * 2) + 1] = [FILE_TABLE + ([i] * 2) + 1] - 1;
+		if([FILE_TABLE + ([i] * 2) + 1] == 0) then
+			[FILE_TABLE + ([i] * 2)] = -1;
+		endif;
+		[i + 0] = -1;
+		[i + 1] = -1;
+	endif;
+	i = i + 2;
+endwhile;
+
+[currentPCB + 1] = 0;
+
+i = 0;
+while(i < 8) do
+	if([PTBR + i + 1] == "01" || [PTBR + i + 1] == "11") then
+		[1280 + [PTBR + i]] = 0;
+		[PTBR + i] = -1;
+		[PTBR + i + 1] = "00";
+	endif;
+	i = i + 2;
+endwhile;
+
+alias newPCB S5;
+alias newPID S4;
+newPID = (currentPID + 1) % 32;
+while([READY_LIST + (newPID * 32) + 1] != 1) do
+	newPID = (newPID + 1) % 32;
+endwhile;
+newPCB = READY_LIST + newPID * 32;
+
+BP = [newPCB + 2];
+SP = [newPCB + 3];
+PTBR = [newPCB + 5];
+PTLR = [newPCB + 6];
+R0 = [newPCB + 7];
+R1 = [newPCB + 8];
+R2 = [newPCB + 9];
+R3 = [newPCB + 10];
+R4 = [newPCB + 11];
+R5 = [newPCB + 12];
+R6 = [newPCB + 13];
+R7 = [newPCB + 14];
+
+SP = SP + 1;
+alias newphysicalSP S2;
+newphysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+[newphysicalSP] = [newPCB + 4];
+[newPCB + 1] = 2;
+ireturn;

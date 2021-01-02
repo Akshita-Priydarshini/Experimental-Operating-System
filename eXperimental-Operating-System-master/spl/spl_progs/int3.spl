@@ -1,0 +1,88 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+alias filedesc S2;
+filedesc = [physicalSP - 4];
+alias currentPID S4;
+currentPID = (PTBR - 1024) / 8;
+alias currentPCB S5;
+currentPCB = READY_LIST + 32 * currentPID;
+alias pPFileTableIndex S6;
+pPFileTableIndex = filedesc * 2;
+alias fileTableIndex S7;
+fileTableIndex = currentPCB + pPFileTableIndex + 15;
+
+if(sysCallNo == 6) then
+	alias newLseek S3;
+	newLseek = [physicalSP - 3];
+	if(filedesc < 0 || filedesc > 7) then
+		[physicalSP -2] = -1;
+		ireturn;
+	endif;
+
+	if([fileTableIndex] == -1) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias fatEntry S9;
+	fatEntry = [FILE_TABLE + ([fileTableIndex] * 2)];
+	
+	alias fileSize S10;
+	fileSize = [FAT + (fatEntry * 8) + 1];
+
+	if(newLseek < 0 || newLseek > fileSize) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	[currentPCB + pPFileTableIndex + 16] = newLseek;
+	
+	[physicalSP - 2] = 0;
+	ireturn;
+endif;
+
+if(sysCallNo == 7) then
+	if(filedesc < 0 || filedesc > 7) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	if([fileTableIndex] == -1) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias lseek S8;
+	lseek = [fileTableIndex + 1];
+	fileTableIndex = [fileTableIndex];
+
+	alias fatEntry S9;
+	fatEntry = [FILE_TABLE + (fileTableIndex * 2)];
+
+	alias fileSize S11;
+	fileSize = [FAT + (fatEntry * 8) + 1];
+	
+	if(lseek >= fileSize) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias basicBlock S10;
+	basicBlock = [FAT + (fatEntry * 8) + 2];
+	
+	load(1, basicBlock);
+	alias dataBlock S12;
+	dataBlock = [512 + (lseek / 512)];
+	store(1, basicBlock);
+
+	load(1, dataBlock);
+	[physicalSP - 3] = [512 + (lseek % 512)];
+		
+	lseek = lseek + 1;
+	[currentPCB + pPFileTableIndex + 16] = lseek;
+	
+	[physicalSP - 2] = -1;
+	ireturn;
+endif;

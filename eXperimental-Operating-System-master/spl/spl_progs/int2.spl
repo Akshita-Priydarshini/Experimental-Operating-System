@@ -1,0 +1,105 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+alias sysCallNo S1;
+sysCallNo = [physicalSP -1];
+alias filename S2;
+filename = [physicalSP - 3];
+alias currentPID S6;
+currentPID = (PTBR - 1024) / 8;
+alias currentPCB S7;
+currentPCB = READY_LIST + (currentPID * 32);
+if(sysCallNo == 2) then
+	alias fat S3;
+	fat = FAT;
+	while(fat <= 3063) do
+		if([fat + 0] == filename) then
+			break;
+		endif;
+		fat = fat + 8;
+	endwhile;
+	if([fat + 0] != filename) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	alias fatEntry S4;
+	fatEntry = (fat - FAT) / 8;
+
+	alias i S5;
+	i = 0;
+	while(i < 128) do
+		if([FILE_TABLE + i] == fatEntry) then
+			break;
+		endif;
+		i = i + 2;
+	endwhile;
+	if(i >= 128) then
+		i = 0;
+		while(i < 128) do
+			if([FILE_TABLE + i] == -1) then
+				break;
+			endif;
+			i = i + 2;
+		endwhile;
+		if(i >= 128) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+	endif;
+	i = i / 2;
+	
+	alias p S8;
+	p = 15;
+	while(p < 30) do
+		if([currentPCB + p] == -1) then
+			break;
+		endif;
+		p = p + 2;
+	endwhile;
+	if(p >= 30) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	[currentPCB + p + 0] = i;
+	[currentPCB + p + 1] = 0;
+	
+	alias count S9;
+	count = (i * 2);
+	[FILE_TABLE + count + 0] = fatEntry;
+	[FILE_TABLE + count + 1] = [FILE_TABLE + count + 1] + 1;
+
+	[physicalSP - 2] = (p - 15) / 2;
+	ireturn;
+else
+	if(sysCallNo == 3) then
+		if(filename < 0 || filename > 7) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		
+		alias fileTableIndex S3;
+		alias pPFileTableIndex S5;
+		pPFileTableIndex = (filename * 2);
+		fileTableIndex = [currentPCB + pPFileTableIndex + 15];
+		
+		if(fileTableIndex == -1) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		
+		alias count S4;
+		count = fileTableIndex * 2;
+		[FILE_TABLE + count + 1] = [FILE_TABLE + count + 1] - 1;
+		if([FILE_TABLE + count + 1] == 0) then
+			[FILE_TABLE + count + 0] = 0;
+		endif;
+		[currentPCB + pPFileTableIndex + 15] = -1;
+		[currentPCB + pPFileTableIndex + 16] = -1;
+		
+		[physicalSP - 2] = 0;
+		ireturn;
+	endif;
+endif; 
+
+		
